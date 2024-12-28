@@ -41,12 +41,5 @@ config FSL_HV_MANAGER
           4) A kernel interface for receiving callbacks when a managed
 	     partition shuts down.
 
-source "drivers/virt/vboxguest/Kconfig"
-
-source "drivers/virt/nitro_enclaves/Kconfig"
-
-source "drivers/virt/acrn/Kconfig"
-
-source "drivers/virt/coco/Kconfig"
 
 endif

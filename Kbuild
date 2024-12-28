@@ -70,7 +70,7 @@ $(atomic-checks): $(obj)/.checked-%: include/linux/atomic/%  FORCE
 # A phony target that depends on all the preparation targets
 
 PHONY += prepare
-prepare: $(offsets-file) missing-syscalls $(atomic-checks)
+prepare: $(offsets-file)  $(atomic-checks)
 	@:
 
 # Ordinary directory descending
@@ -86,14 +86,8 @@ obj-y			+= mm/
 obj-y			+= fs/
 obj-y			+= ipc/
 obj-y			+= security/
-obj-y			+= crypto/
-obj-$(CONFIG_BLOCK)	+= block/
-obj-$(CONFIG_IO_URING)	+= io_uring/
-obj-$(CONFIG_RUST)	+= rust/
 obj-y			+= $(ARCH_LIB)
 obj-y			+= drivers/
-obj-y			+= sound/
-obj-$(CONFIG_SAMPLES)	+= samples/
 obj-$(CONFIG_NET)	+= net/
 obj-y			+= virt/
 obj-y			+= $(ARCH_DRIVERS)

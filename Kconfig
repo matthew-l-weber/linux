@@ -23,10 +23,6 @@ source "fs/Kconfig"
 
 source "security/Kconfig"
 
-source "crypto/Kconfig"
-
 source "lib/Kconfig"
 
 source "lib/Kconfig.debug"
-
-source "Documentation/Kconfig"
