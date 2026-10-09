@@ -31,6 +31,16 @@ Collecting comparison operands is supported with GCC 8+ or with Clang.
 To enable KCOV, configure the kernel with::
 
         CONFIG_KCOV=y
+        CONFIG_DEBUG_FS=y
+
+``CONFIG_KCOV_INSTRUMENT_ALL=y`` (the default) instruments eligible kernel
+code throughout the build. If it is disabled, only explicitly selected code
+is instrumented. Check the resolved configuration after rebuilding; enabling
+KCOV alone does not guarantee that a particular path produces coverage.
+
+To resolve collected PCs to source locations, also build with debug information
+(``CONFIG_DEBUG_INFO=y``) and retain the matching ``vmlinux``. Debug information
+is not required for collection itself.
 
 To enable comparison operands collection, set::
 
@@ -48,6 +58,7 @@ single syscall from within a test program:
 
 .. code-block:: c
 
+    #include <errno.h>
     #include <stdio.h>
     #include <stddef.h>
     #include <stdint.h>
@@ -56,6 +67,7 @@ single syscall from within a test program:
     #include <sys/stat.h>
     #include <sys/ioctl.h>
     #include <sys/mman.h>
+    #include <sys/syscall.h>
     #include <unistd.h>
     #include <fcntl.h>
     #include <linux/types.h>
@@ -68,9 +80,10 @@ single syscall from within a test program:
     #define KCOV_TRACE_PC  0
     #define KCOV_TRACE_CMP 1
 
-    int main(int argc, char **argv)
+    int main(void)
     {
-	int fd;
+	int fd, error;
+	long result;
 	unsigned long *cover, n, i;
 
 	/* A single fd descriptor allows coverage collection on a single
@@ -92,17 +105,28 @@ single syscall from within a test program:
 		perror("ioctl"), exit(1);
 	/* Reset coverage from the tail of the ioctl() call. */
 	__atomic_store_n(&cover[0], 0, __ATOMIC_RELAXED);
-	/* Call the target syscall call. */
-	read(-1, NULL, 0);
-	/* Read number of PCs collected. */
+	/* Call the target syscall without a libc-specific read wrapper. */
+	errno = 0;
+	result = syscall(SYS_read, -1, NULL, 0);
+	error = errno;
+	/* Snapshot before disable, so its ioctl is not part of this count. */
 	n = __atomic_load_n(&cover[0], __ATOMIC_RELAXED);
-	for (i = 0; i < n; i++)
-		printf("0x%lx\n", cover[i + 1]);
-	/* Disable coverage collection for the current thread. After this call
-	 * coverage can be enabled for a different thread.
+	/* Stop recording before printing: output syscalls must not fill the
+	 * buffer. Coverage can now be enabled for a different thread.
 	 */
 	if (ioctl(fd, KCOV_DISABLE, 0))
 		perror("ioctl"), exit(1);
+	if (result != -1 || error != EBADF) {
+		fprintf(stderr, "unexpected read result: %ld, errno: %d\n",
+			result, error);
+		exit(1);
+	}
+	if (!n || n >= COVER_SIZE - 1) {
+		fprintf(stderr, "empty or full coverage buffer: %lu PCs\n", n);
+		exit(1);
+	}
+	for (i = 0; i < n; i++)
+		printf("0x%lx\n", cover[i + 1]);
 	/* Free resources. */
 	if (munmap(cover, COVER_SIZE * sizeof(unsigned long)))
 		perror("munmap"), exit(1);
@@ -111,7 +135,41 @@ single syscall from within a test program:
 	return 0;
     }
 
-After piping through ``addr2line`` the output of the program looks as follows::
+In PC mode, the first ``unsigned long`` holds the count and the remaining
+``COVER_SIZE - 1`` slots hold PCs. KCOV stops adding entries when the buffer
+is full; a full count does not distinguish an exact fit from truncation.
+Increase the buffer or shorten the collection window and repeat. An empty
+buffer can indicate that the target path was not instrumented; it is not
+proof that no kernel code ran.
+
+Snapshotting the count before ``KCOV_DISABLE`` excludes the disable ioctl from
+the printed list, but syscall entry/return paths around the target can still
+appear. This is a collection window for the current thread, not boot coverage
+or coverage of other tasks. Repeated PCs do not establish branch coverage,
+and unobserved code is not proven unreachable.
+
+.. _kcov-symbolizing-pcs:
+
+Symbolizing PCs
+~~~~~~~~~~~~~~~
+
+Save the example as ``kcov-example.c``, compile it for the target, and run it
+where debugfs is mounted and accessible::
+
+    cc -O2 -o kcov-example kcov-example.c
+    sudo ./kcov-example > kcov-pcs.txt
+    test -s kcov-pcs.txt
+    addr2line -f -i -e /path/to/matching/vmlinux < kcov-pcs.txt > kcov-symbols.txt
+
+For a cross-built target, use the matching toolchain's compiler and
+``addr2line`` (for example ``aarch64-linux-gnu-addr2line``). Use the exact build's
+debug ELF, not another build's ``vmlinux``. KCOV subtracts the kernel's KASLR
+offset on architectures that support it; do not apply an assumed relocation
+adjustment. Instrumented modules need their own debug ELF and load-address
+handling rather than symbolization against ``vmlinux``.
+
+Resolved function names and source lines depend on the kernel revision,
+optimization, and debug information. The output can look as follows::
 
     SyS_read
     fs/read_write.c:562
@@ -184,8 +242,15 @@ Comparison operands collection is similar to coverage collection:
 		perror("ioctl"), exit(1);
 	__atomic_store_n(&cover[0], 0, __ATOMIC_RELAXED);
 	read(-1, NULL, 0);
-	/* Read number of comparisons collected. */
+	/* Snapshot and disable before printing, as in PC mode. */
 	n = __atomic_load_n(&cover[0], __ATOMIC_RELAXED);
+	if (ioctl(fd, KCOV_DISABLE, 0))
+		perror("ioctl"), exit(1);
+	if (n >= (COVER_SIZE * sizeof(unsigned long) / sizeof(uint64_t) - 1) /
+		 KCOV_WORDS_PER_CMP) {
+		fprintf(stderr, "full comparison buffer: %lu records\n", n);
+		exit(1);
+	}
 	for (i = 0; i < n; i++) {
 		uint64_t ip;
 
@@ -204,8 +269,6 @@ Comparison operands collection is similar to coverage collection:
 			ip, type, arg1, arg2, size,
 		is_const ? "const" : "non-const");
 	}
-	if (ioctl(fd, KCOV_DISABLE, 0))
-		perror("ioctl"), exit(1);
 	/* Free resources. */
 	if (munmap(cover, COVER_SIZE * sizeof(unsigned long)))
 		perror("munmap"), exit(1);
