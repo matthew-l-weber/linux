@@ -115,6 +115,7 @@ modules.order
 !.cocciconfig
 !.editorconfig
 !.get_maintainer.ignore
+!/.github/
 !.gitattributes
 !.gitignore
 !.kunitconfig
@@ -194,3 +195,4 @@ sphinx_*/
 
 # bc language scripts (not LLVM bitcode)
 !kernel/time/timeconst.bc
+*.gcov
