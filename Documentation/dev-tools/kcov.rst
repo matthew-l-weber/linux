@@ -31,6 +31,15 @@ Collecting comparison operands is supported with GCC 8+ or with Clang.
 To enable KCOV, configure the kernel with::
 
         CONFIG_KCOV=y
+        CONFIG_DEBUG_FS=y
+
+``CONFIG_KCOV_INSTRUMENT_ALL=y`` (the default) instruments eligible kernel
+code throughout the build. If it is disabled, only explicitly selected code
+is instrumented.
+
+To resolve collected PCs to source locations, also build with debug information
+(``CONFIG_DEBUG_INFO=y``) and retain the matching ``vmlinux``. Debug information
+is not required for collection itself.
 
 To enable comparison operands collection, set::
 
@@ -94,7 +103,7 @@ single syscall from within a test program:
 	__atomic_store_n(&cover[0], 0, __ATOMIC_RELAXED);
 	/* Call the target syscall call. */
 	read(-1, NULL, 0);
-	/* Read number of PCs collected. */
+	/* Save the output count; KCOV continues recording until disabled. */
 	n = __atomic_load_n(&cover[0], __ATOMIC_RELAXED);
 	for (i = 0; i < n; i++)
 		printf("0x%lx\n", cover[i + 1]);
@@ -111,7 +120,36 @@ single syscall from within a test program:
 	return 0;
     }
 
-After piping through ``addr2line`` the output of the program looks as follows::
+In PC mode, the first ``unsigned long`` holds the count and the remaining
+``COVER_SIZE - 1`` slots hold PCs. KCOV stops adding entries when the buffer
+is full, so increase the buffer or shorten the collection window if the count
+reaches it. An empty buffer can indicate that the target path was not
+instrumented; it is not proof that no kernel code ran.
+
+The count is read while KCOV is enabled and sets the number of entries printed.
+KCOV remains enabled while those entries are printed, so the output syscalls
+may add entries to the buffer. They are not included in the printed list,
+because the loop is bounded by the saved count. Syscall entry/return paths
+around the target can also appear.
+
+Symbolizing PCs
+~~~~~~~~~~~~~~~
+
+Save the example as ``kcov-example.c``, compile it for the target, and run it
+where debugfs is mounted and accessible::
+
+    cc -O2 -o kcov-example kcov-example.c
+    sudo ./kcov-example > kcov-pcs.txt
+    addr2line -f -i -e /path/to/matching/vmlinux < kcov-pcs.txt > kcov-symbols.txt
+
+For a cross-built target, use the matching toolchain's compiler and
+``addr2line`` (for example ``aarch64-linux-gnu-addr2line``). Use the exact build's
+debug ELF, not another build's ``vmlinux``. KCOV subtracts the kernel's KASLR
+offset on architectures that support it; do not apply an assumed relocation
+adjustment. Instrumented modules need their own debug ELF and load-address
+handling rather than symbolization against ``vmlinux``.
+
+The output can look as follows::
 
     SyS_read
     fs/read_write.c:562
@@ -184,7 +222,7 @@ Comparison operands collection is similar to coverage collection:
 		perror("ioctl"), exit(1);
 	__atomic_store_n(&cover[0], 0, __ATOMIC_RELAXED);
 	read(-1, NULL, 0);
-	/* Read number of comparisons collected. */
+	/* Save the output count, as in PC mode. */
 	n = __atomic_load_n(&cover[0], __ATOMIC_RELAXED);
 	for (i = 0; i < n; i++) {
 		uint64_t ip;
