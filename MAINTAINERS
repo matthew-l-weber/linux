@@ -28154,6 +28154,12 @@ F:	sound/soc/codecs/arizona*
 F:	sound/soc/codecs/cs47l24*
 F:	sound/soc/codecs/wm*
 
+WORKLOAD ANALYSIS DOCUMENTATION
+M:	Matthew Weber <matthew.l.weber@gmail.com>
+L:	linux-doc@vger.kernel.org
+S:	Maintained
+F:	Documentation/admin-guide/workload-tracing.rst
+
 WORKQUEUE
 M:	Tejun Heo <tj@kernel.org>
 R:	Lai Jiangshan <jiangshanlai@gmail.com>
