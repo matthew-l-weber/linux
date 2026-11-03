@@ -706,7 +706,7 @@ investigation, not proof of an unnecessary feature.
 Keep the built-code inventory alongside the runtime observations using
 ``scripts/kernel-sloc --report compiled.json kernel .`` and, for the matching
 debug ELF, ``scripts/kernel-sloc --report linked.json dwarf vmlinux``. See
-``scripts/kernel-sloc --help`` for its modes and requirements. The
+:doc:`kernel-minimization` ("Counting kernel SLOC") for setup and scope. The
 reports list compiled files and DWARF-resolved functions/source lines, not
 execution. Compare full source paths as well as function names; repeated
 static names and inlining make names alone insufficient. An unobserved entry
@@ -728,3 +728,4 @@ References
  * `paxtest README <https://github.com/opntr/paxtest-freebsd/blob/hardenedbsd/0.9.14-hbsd/README>`__
  * `stress-ng <https://www.mankier.com/1/stress-ng>`__
  * `Monitoring and managing system status and performance <https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/8/html/monitoring_and_managing_system_status_and_performance/index>`__
+ * :doc:`Kernel minimization <kernel-minimization>`

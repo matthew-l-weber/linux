@@ -28158,6 +28158,7 @@ WORKLOAD ANALYSIS DOCUMENTATION
 M:	Matthew Weber <matthew.l.weber@gmail.com>
 L:	linux-doc@vger.kernel.org
 S:	Maintained
+F:	Documentation/admin-guide/kernel-minimization.rst
 F:	Documentation/admin-guide/workload-tracing.rst
 
 WORKQUEUE
