@@ -13767,6 +13767,7 @@ M:	Matthew Weber <matthew.l.weber@gmail.com>
 L:	linux-kbuild@vger.kernel.org
 S:	Maintained
 F:	scripts/kernel-sloc
+F:	scripts/kernel_sloc_test.py
 
 KERNEL SMB3 SERVER (KSMBD)
 M:	Namjae Jeon <linkinjeon@kernel.org>
