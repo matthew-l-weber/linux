@@ -1,0 +1,115 @@
+From d951c0d38718dbb59680f9becb89cd64343584d0 Mon Sep 17 00:00:00 2001
+From: Matthew Weber <matthew.l.weber@gmail.com>
+Date: Wed, 4 Nov 2026 19:20:56 -0600
+Subject: [PATCH v2 0/4] Documentation: Add kernel minimization guide
+
+Hi all,
+
+This series adds documentation and a script for measuring source lines of
+code (SLOC) in kernel builds, supporting developers and system integrators
+who need to trim a Linux kernel.
+
+The Workload analysis section of the admin-guide already describes tracing
+a workload. This series builds on that guidance with a worked example of
+using workload observations to inform kernel minimization and measure the
+resulting configuration. The guide is intended for developers working on
+embedded and safety-critical use cases, including work related to ELISA.
+
+The series builds on the ELISA Aerospace Working Group's ongoing
+minimization discussions and iterations in
+https://github.com/elisa-tech/wg-aerospace/pull/257. That effort explores a
+generic, newcomer-oriented workflow for tracing a workload, iterating on a
+kernel configuration, measuring kernel metrics, and understanding userspace
+metrics. The ELISA documentation aims to present a complete containerized
+workflow, with analysis steps to guide users through successive iterations.
+This series contributes reusable, general-purpose kernel documentation and
+tooling upstream to support that broader process. Clear upstream guidance can
+also give AI-assisted tools reliable steering context as they help users
+iterate on kernel configurations. One likely early application is producing
+minimized release configurations for Space Grade Linux.
+
+Rendered drafts are available online:
+
+  Kernel minimization:
+  https://matthew-l-weber.github.io/linux/admin-guide/kernel-minimization.html
+
+  Workload tracing:
+  https://matthew-l-weber.github.io/linux/admin-guide/workload-tracing.html
+
+The series and its review discussion are in PR #1:
+https://github.com/matthew-l-weber/linux/pull/1
+
+The patches are:
+
+  1/4 Documentation: kcov: clarify coverage example
+      Clarify that the saved count bounds the printed entries while KCOV
+      remains enabled until the disable ioctl. Document the relevant
+      config requirements and PC symbolization.
+
+  2/4 scripts: Add kernel-sloc helper script
+      Add a helper to count source lines from compile_commands.json or
+      estimate distinct source lines represented in a vmlinux DWARF line
+      table.
+
+  3/4 Documentation: admin-guide: Update workload tracing guide
+      Expand workload tracing guidance with ftrace function-graph
+      tracing, syscall tracing under QEMU with the GDB stub, and mapping
+      observations to kernel configuration symbols. Add the Workload
+      analysis MAINTAINERS entry.
+
+  4/4 Documentation: admin-guide: Add kernel minimization guide
+      Add the guide to the Workload analysis section, cross-reference it
+      from the workload tracing guide, and add its MAINTAINERS coverage.
+
+Tool-use disclosure: I used GitHub Copilot CLI while preparing this series.
+It helped revise the KCOV example, edit parts of the documentation, add
+MAINTAINERS entries, and integrate error-handling revisions to kernel-sloc.
+I reviewed the changes and take responsibility for the series.
+
+I checked kernel-sloc syntax and help output, and ran
+checkpatch.pl --strict on all four patches in the new order. The GitHub
+Actions htmldocs build completed successfully with no warnings from the
+changed files; the published documentation is available at
+https://matthew-l-weber.github.io/linux/admin-guide/index.html#workload-analysis.
+I did not run make htmldocs locally.
+
+Changes in v2:
+  - Reorder the series so the workload tracing update precedes the kernel
+    minimization guide. The guide refers to the "Tracing a minimal user
+    space" and "Mapping observations to configuration" sections added by
+    the tracing update, so those sections now exist before they are
+    referenced (reported by Sashiko).
+  - Move the cross-references from the workload tracing guide to the
+    kernel minimization guide into the minimization patch, so no patch
+    refers to a document added later in the series.
+  - Create the Workload analysis MAINTAINERS entry in the tracing patch and
+    extend it with kernel-minimization.rst in the minimization patch.
+  - No other content changes.
+
+Any feedback is appreciated.
+
+Thanks,
+Matthew
+
+Matthew Weber (4):
+  Documentation: kcov: clarify coverage example
+  scripts: Add kernel-sloc helper script
+  Documentation: admin-guide: Update workload tracing guide
+  Documentation: admin-guide: Add kernel minimization guide
+
+ Documentation/admin-guide/index.rst           |   1 +
+ .../admin-guide/kernel-minimization.rst       | 413 ++++++++++++++++++
+ .../quickly-build-trimmed-linux.rst           |   4 +
+ .../admin-guide/workload-tracing.rst          | 139 +++++-
+ Documentation/dev-tools/kcov.rst              |  44 +-
+ MAINTAINERS                                   |  13 +
+ scripts/kernel-sloc                           | 299 +++++++++++++
+ 7 files changed, 903 insertions(+), 10 deletions(-)
+ create mode 100644 Documentation/admin-guide/kernel-minimization.rst
+ create mode 100755 scripts/kernel-sloc
+
+
+base-commit: a592a36e49372172d7c7551ec19ed18184c935e1
+-- 
+2.39.5
+

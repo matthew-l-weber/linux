@@ -178,7 +178,7 @@ subsystems expectations will be found here.
    :maxdepth: 1
 
    workload-tracing
-   kernel-minimization
+   kernel-tailoring
 
 Everything else
 ---------------

@@ -8,9 +8,8 @@ How to quickly build a trimmed Linux kernel
 This guide explains how to swiftly build Linux kernels that are ideal for
 testing purposes, but perfectly fine for day-to-day use, too.
 
-.. note:: To shrink a kernel down to only what one known workload needs, and
-   to measure the result, see :doc:`kernel-minimization`, which builds on this
-   guide.
+.. note:: To tailor a kernel for one known workload and measure the result, see
+   :doc:`kernel-tailoring`, which builds on this guide.
 
 The essence of the process (aka 'TL;DR')
 ========================================
@@ -1098,4 +1097,3 @@ document, as :ref:`described above <submit_improvements_qbtl>`.
    is available under CC-BY-4.0, as versions of this text that were processed
    (for example by the kernel's build system) might contain content taken from
    files which use a more restrictive license.
-

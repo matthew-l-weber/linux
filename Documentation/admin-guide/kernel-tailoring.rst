@@ -1,34 +1,31 @@
 .. SPDX-License-Identifier: (GPL-2.0+ OR CC-BY-4.0)
 
-=================================================
-Minimizing a Linux kernel for a single workload
-=================================================
+==============================================
+Tailoring a Linux kernel for a single workload
+==============================================
 
 :Authors: - Matthew Weber <matthew.l.weber@gmail.com>
           - ELISA Aerospace Working Group <https://lists.elisa.tech/g/aerospace>
 
-This document explains how to trim a Linux kernel for a single, known workload,
+This document explains how to tailor a Linux kernel for a single, known workload,
 check that it still runs, and measure the resulting build. The examples are
 starting points to adapt to your hardware and workload, not configurations to
 copy unchanged.
 
 A smaller kernel carries less code to build, boot, review, and maintain. How
-much that matters depends on the situation: a developer trimming a test kernel
+much that matters depends on the situation: a developer tailoring a test kernel
 cares about build time, while an integrator preparing a kernel for analysis or
 for a safety- or security-critical deployment cares about how much code must be
-understood and justified. This guide stays with the mechanics of trimming and
+understood and justified. This guide stays with the mechanics of tailoring and
 measuring; where a particular step is useful for one of those analyses, it is
 called out as an example, not as a requirement.
 
-This guide builds on, rather than repeats, several existing documents:
+This guide builds on several existing documents:
 
-* :doc:`quickly-build-trimmed-linux` for the mechanics of getting, building,
-  and installing a kernel. This guide assumes you have followed it at least
-  once and reuses its sections by name below -- in particular its "Download the
-  sources" and "Define the build configuration for your kernel" steps. Note
-  that guide targets a kernel built **natively for the machine you are on**; the
-  cross-compiled, boot-in-QEMU angle used here is the main thing this guide adds
-  on top of it (see `Building: native vs cross-compiled`_).
+* :doc:`quickly-build-trimmed-linux` for further detail on getting, building,
+  and installing a kernel. That guide builds natively for the machine you are
+  on; this one cross-compiles and boots in QEMU (see
+  `Building: native vs cross-compiled`_).
 * :doc:`workload-tracing` for discovering the subsystems a workload uses, and
   :doc:`/trace/ftrace` for tracing the kernel functions it reaches.
 * :doc:`/dev-tools/kcov` and :doc:`/dev-tools/gcov` for coverage collection.
@@ -39,8 +36,7 @@ This guide builds on, rather than repeats, several existing documents:
 Baseline scenario
 =================
 
-The walkthrough assumes the simplest possible launch model, which keeps the
-chain from "what the workload needs" to "what the kernel must provide" short:
+The walkthrough assumes the simplest possible launch model:
 
    **The kernel launches the workload directly as PID 1. There is no init
    system, no service manager, and no general multi-user user space.**
@@ -51,9 +47,15 @@ selects init after mounting a real root filesystem; it does not override a
 working initramfs ``/init``.
 
 With this baseline, the user space is essentially the application plus the C
-library it links against. The decision cascades into the configuration: no
-service management, no getty/login, only the library and kernel features the
-application itself exercises.
+library it links against. No service manager or getty/login is needed, but the
+kernel still needs features beyond those the application itself exercises.
+
+Workload requirements and platform requirements are distinct. The application
+and its library need system calls and other kernel interfaces; the platform
+needs boot, interrupt, timer, console, and device support even when the
+application never directly requests them. Recovery, diagnostics, safety, and
+security requirements can require further features not observed in a normal
+run. Account for each independently before removing configuration options.
 
 The worked example boots an ``arm64`` kernel under QEMU with a static "hello
 world" program as PID 1. See `A minimal workload`_ below.
@@ -66,8 +68,8 @@ become built-in (``=y``) rather than being dropped. A top-down build from
 ``defconfig`` therefore links every ``defconfig`` module into the image; check
 the resolved configuration and disable unneeded features explicitly.
 
-Building and trimming
-=====================
+Building and tailoring
+======================
 
 Change one feature group at a time, rebuild, and check that the workload still
 runs. The measurement examples below can help compare working configurations.
@@ -75,25 +77,35 @@ runs. The measurement examples below can help compare working configurations.
 Prerequisites
 -------------
 
-Follow "Install build requirements" in :doc:`quickly-build-trimmed-linux`
-for the native build tools. On a Debian/Ubuntu x86_64 host, this example adds::
+Install the native build tools listed in "Install build requirements" in
+:doc:`quickly-build-trimmed-linux`, which includes package examples for several
+distributions. For this example also install an arm64 cross-compiler and
+binutils, the arm64 C library headers and static library, QEMU's AArch64 system
+emulator, and ``file``. On a Debian/Ubuntu x86_64 host, for example::
 
     sudo apt install gcc-aarch64-linux-gnu qemu-system-arm file
 
 The cross-compiler package brings in matching binutils and, with the normal
-recommended packages, the target libc headers and static library. ``qemu-system-arm`` provides
-``qemu-system-aarch64``; ``file`` checks the application binary. Other tools
-are introduced where they are used.
+recommended packages, the target libc headers and static library.
+``qemu-system-arm`` provides ``qemu-system-aarch64``; ``file`` checks the
+application binary. Package names vary by distribution. Other tools are
+introduced where they are used.
 
 Get the sources
 ---------------
 
-Retrieve the kernel sources exactly as described in
-:doc:`quickly-build-trimmed-linux` ("Download the sources"). For a workload
-that must track a long-lived kernel, follow that guide's instructions for
-adding a stable/longterm branch rather than building bleeding-edge mainline, so
-you measure against a kernel with a long maintenance window. All commands below
-run from the resulting source tree.
+For example, retrieve a shallow copy of the current mainline sources and
+enter the source tree::
+
+    git clone --depth 1 -b master \
+        https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git ~/linux
+    cd ~/linux
+
+These commands follow the approach in :doc:`quickly-build-trimmed-linux`;
+see its "Download the sources" section for full clones, released versions,
+and stable/longterm branches. For a deployed workload, select a kernel version
+with a maintenance lifetime appropriate to the system and record the revision
+used for each measurement. All commands below run from the source tree.
 
 Building: native vs cross-compiled
 ----------------------------------
@@ -101,7 +113,7 @@ Building: native vs cross-compiled
 The trimmed-build guide builds a kernel **natively, for the machine you are
 running on**, and installs it there. This guide instead builds for a target
 architecture and boots the result under QEMU, so nothing is installed on your
-host. The mechanics of cross-building are not specific to minimization and are
+host. The mechanics of cross-building are not specific to tailoring and are
 documented in :doc:`/kbuild/kbuild` (the ``ARCH`` and ``CROSS_COMPILE``
 variables); set them once for the worked example::
 
@@ -109,7 +121,8 @@ variables); set them once for the worked example::
     export CROSS_COMPILE=aarch64-linux-gnu-
 
 Every ``make`` below (``defconfig``, ``tinyconfig``, ``olddefconfig``,
-``Image``) then honours them. For a native arm64 build, omit ``CROSS_COMPILE`` and use the native tools.
+``Image``) then honours them. For a native arm64 build, omit ``CROSS_COMPILE``
+and use the native tools.
 An x86 kernel or application cannot substitute for the arm64 images in the
 QEMU commands. Other architectures need their own image target, console,
 platform support, and emulator. The trimmed-build guide's "Install your kernel"
@@ -121,12 +134,15 @@ matching ``vmlinux`` when resolving debug information or coverage PCs.
 ``make clean`` preserves ``.config`` but removes build artifacts; do not use
 ``mrproper`` between changes.
 
-Iterate toward minimal
-----------------------
+Iterate on the configuration
+----------------------------
 
 Pick a direction. These mirror the two bases the trimmed-build guide's "Define
 the build configuration for your kernel" section describes -- starting from an
-existing (large) config versus starting from scratch:
+existing (large) config versus starting from scratch. Neither base is a
+security policy: in particular, the bottom-up example is not hardened for
+deployment. Review `Safety and security configuration`_ before accepting
+either result.
 
 * **Top-down** -- start from a working configuration and remove features,
   re-testing after each removal. For this arm64 QEMU example, build
@@ -145,6 +161,9 @@ existing (large) config versus starting from scratch:
   For a native target, the trimmed-build guide's
   ``localmodconfig``/``olddefconfig`` approach is another starting point; do not
   use the host's configuration for an unrelated cross-compiled target.
+  ``make kvm_guest.config`` enables additional KVM guest options on top of an
+  existing configuration; it is a fragment, not a replacement for a baseline.
+  It may be useful for a KVM guest, but this QEMU example does not require KVM.
   Save the working configuration, then change one group::
 
       cp .config config.before
@@ -176,7 +195,8 @@ existing (large) config versus starting from scratch:
   direction.
 
 To browse the configuration tree interactively with help text in view, use
-``make menuconfig`` (needs ``libncurses-dev``), as described in the
+``make menuconfig`` (needs ncurses development headers, called
+``libncurses-dev`` on Debian/Ubuntu), as described in the
 trimmed-build guide's "Individual adjustments" section.
 
 After each change, repeat the boot command in `A minimal workload`_ with
@@ -190,6 +210,45 @@ Do not assume that ``tinyconfig`` to ``defconfig`` measures one subsystem:
 optimization policy, platform drivers, and many unrelated settings change too.
 For a single-group comparison, save the last resolved config as
 ``config.before``, change just that group, and clean/rebuild.
+
+Safety and security configuration
+=================================
+
+A successful boot does not establish that a configuration is safe or secure.
+``tinyconfig`` favors size and can leave protections disabled; ``defconfig``
+and guest configuration fragments are not necessarily equivalent to a
+distribution's security policy either. Removing unused functionality can reduce
+attack surface, but removing defenses can increase risk.
+
+Define the target's threat model and safety requirements, including hardware,
+interfaces, recovery, and deployment environment. Compare the resolved
+``.config`` with a trusted configuration for that target and the same kernel
+version. For example, ``scripts/diffconfig`` can show changes from a saved
+baseline. Review the Kconfig help and dependencies for each difference rather
+than assuming a smaller configuration is better.
+
+The kernel's ``kernel/configs/hardening.config`` and
+``arch/arm64/configs/hardening.config`` list hardening options to consider,
+including stack protection, memory initialization, and restrictions on kernel
+memory access. The latter also contains hardware- and compiler-dependent arm64
+options. See :doc:`/security/self-protection` for the defenses and their
+purpose. These fragments are review starting points, not a complete policy:
+some settings may be unavailable, unnecessary, or inappropriate for a given
+target. Apply selected settings, run ``make olddefconfig``, and check the
+resolved values and dependencies. Test the resulting image on the target,
+including performance, failure handling, and security behavior; repeat this
+review after configuration or kernel updates.
+
+The external `ELISA kconfig-safety-check
+<https://github.com/elisa-tech/kconfig-safety-check>`_ provides another set of
+configuration recommendations for review. Check its supported kernel versions,
+architecture, and environment before relying on its results: the published
+checks include version limits, and a missing or passing result does not prove
+that a protection is present or applicable. For example, at revision
+``6136889f62fe`` its checks are limited to kernel versions through 6.7, so a
+newer kernel can produce an incomplete report. Reconcile findings with the
+current kernel's Kconfig help and the system's requirements; do not enable or
+disable options solely to satisfy a checker.
 
 Deciding what to remove
 =======================
@@ -360,10 +419,10 @@ with no dynamic loader or libraries present in the rootfs::
     aarch64-linux-gnu-gcc -static -O2 -o hello_init hello_init.c
     file hello_init     # -> ELF 64-bit ... ARM aarch64 ... statically linked ...
 
-Pack the application as ``/init`` in a gzip-compressed archive.
-Install ``cpio`` if needed; ``gzip`` is normally present on the build host::
+Pack the application as ``/init`` in a gzip-compressed archive. Install
+``cpio`` and ``gzip`` with your distribution's package manager if needed
+(``sudo apt install cpio gzip`` on Debian/Ubuntu)::
 
-    sudo apt install cpio
     mkdir -p rootfs
     cp hello_init rootfs/init
     chmod 0755 rootfs/init
@@ -405,6 +464,7 @@ References
   testing and functional test suites.
 * :doc:`/kbuild/kconfig`, :doc:`/kbuild/kconfig-language` -- configuration;
   :doc:`/kbuild/kbuild` -- ARCH / CROSS_COMPILE and other build variables.
+* :doc:`/security/self-protection` -- kernel hardening mechanisms.
 * ``scripts/kernel-sloc`` -- the SLOC counter used for the metrics above.
 * ``scripts/diffconfig``, ``scripts/bloat-o-meter`` -- related size/diff
   helpers.
