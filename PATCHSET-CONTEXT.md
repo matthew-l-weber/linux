@@ -4,6 +4,30 @@ This is a working handoff, not part of the proposed upstream documentation.
 Transfer it to the other computer separately, or include it temporarily in a
 branch commit and remove it before preparing upstream patches.
 
+> **TODO, do not lose: fix the links in the wg-aerospace repo after the
+> `kernel-minimization` to `kernel-tailoring` rename.**
+>
+> The ELISA AeroWG repository (`matthew-l-weber/wg-aerospace`, branch
+> `mlw/sort-kernel-min-work`) links to this guide's published page and cites its
+> source path. Once the rename is final and the Pages deploy has published the
+> new page, change both forms there:
+>
+> - URL: `https://matthew-l-weber.github.io/linux/admin-guide/kernel-minimization.html`
+>   to `.../kernel-tailoring.html` (the old URL will 404 after the deploy).
+> - Path text: `Documentation/admin-guide/kernel-minimization.rst` to
+>   `Documentation/admin-guide/kernel-tailoring.rst`.
+> - Link text such as "Kernel Minimization Guide" if the title changed.
+>
+> Files with references (counts of `kernel-minimization`): `docs/SoftwareMinimization.md` 4,
+> `docs/minimal-linux/HelloInit.md` 5, `KernelComplexity.md` 3, `HelloCFS.md` 2,
+> `CertificationProgression.md` 2, `TestingSteeringNotes.md` 2, `KernelConfigAnalysis.md` 1,
+> `MaxCoverageMultiSuite.md` 1. The two files under `meeting-minutes/` are
+> historical and can stay.
+>
+> Find them with `grep -rn kernel-minimization docs` in that repo. Also keep
+> `GUIDE_PAGES` in `.github/workflows/docs-pages.yml` here in step with the final
+> file name, or the Pages build fails its output check (run 43552343271 did).
+
 ## Current goal
 
 Develop the kernel documentation and tooling patch series for identifying
