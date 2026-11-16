@@ -21,6 +21,8 @@ jobs:
     timeout-minutes: 60
     env:
       SPHINX_IMGMATH: 'no'
+      # Guide pages that must exist in the built site; update here on a rename.
+      GUIDE_PAGES: 'kernel-tailoring workload-tracing'
     steps:
       - name: Check out documentation branch
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -68,10 +70,20 @@ jobs:
             exit 1
           fi
           echo "No Sphinx warnings for files changed relative to origin/docs-next."
-          test -s Documentation/output/index.html
-          test -s Documentation/output/admin-guide/kernel-minimization.html
-          test -s Documentation/output/admin-guide/workload-tracing.html
-          test -s Documentation/output/searchindex.js
+          required="Documentation/output/index.html Documentation/output/searchindex.js"
+          for page in $GUIDE_PAGES; do
+            required+=" Documentation/output/admin-guide/${page}.html"
+          done
+          missing=false
+          for out in $required; do
+            if [[ ! -s "$out" ]]; then
+              echo "::error::Expected build output is missing or empty: $out"
+              missing=true
+            fi
+          done
+          if [[ "$missing" == true ]]; then
+            exit 1
+          fi
 
       - name: Retain build logs
         if: always()
